@@ -1,0 +1,88 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# API Keys
+api_keys.txt
+secrets.json
+config.ini
+
+# Data files (too large for git)
+*.csv
+*.xlsx
+*.xls
+*.tsv
+data/
+datasets/
+raw_data/
+
+# Cache and temporary files
+.cache/
+*.tmp
+*.log
+*.bak
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Output files
+output/
+results/
+exports/
+*.pdf
+*.png
+*.jpg
+*.jpeg
+
+# Kaggle
+.kaggle/
+kaggle.json
+
+# Model files
+*.pkl
+*.pickle
+*.h5
+*.model
+*.pt
+*.pth
+
+# Documentation build
+docs/_build/
+docs/_static/
+docs/_templates/

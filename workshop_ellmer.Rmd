@@ -1,0 +1,266 @@
+---
+title: "AI-Powered Academic Research Workshop (R)"
+subtitle: "Prompts and Loops with ellmer"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## New to APIs? Quick primer
+
+- An API lets your R code “ask” a service (an AI model) to do something and return a result.
+- You prepare a prompt (instructions), send it, and parse the response.
+
+Flow: You → API endpoint → Model runs → Response back to you
+
+## First-run checklist
+
+1) Install packages (run once):
+
+```{r install, eval=FALSE}
+install.packages(c("ellmer", "glue", "jsonlite", "tibble"))
+```
+
+2) Add your API key to your R environment (OpenAI example):
+
+- Temporary (current session): `Sys.setenv(OPENAI_API_KEY = "sk-...")`
+- Persistent: Add `OPENAI_API_KEY=sk-...` to your `~/.Renviron` then restart R
+
+3) Verify a basic call works below.
+
+## Load libraries and create a chat object
+
+```{r libs}
+library(ellmer)
+library(glue)
+library(jsonlite)
+library(tibble)
+
+# Create a chat session (choose a model you have access to)
+# If OPENAI_API_KEY is not set, provide a safe mock so the doc can knit
+RUN_LIVE <- nzchar(Sys.getenv("OPENAI_API_KEY"))
+if (RUN_LIVE) {
+  chat <- ellmer::chat_openai(model = "gpt-3.5-turbo")
+} else {
+  chat <- list(
+    chat = function(p) paste0(
+      "[SKIPPED live API] Set OPENAI_API_KEY to run this chunk.\nPrompt preview:\n",
+      substr(p, 1, 800)
+    )
+  )
+}
+```
+
+## Part 1: Basic query — testing the connection
+
+```{r basic-query}
+prompt <- "What are the key components of a systematic literature review?"
+resp <- chat$chat(prompt)
+cat(resp)
+```
+
+## Prompt templates: edit these in one place
+
+Centralize prompts so you can re-use them in loops.
+
+```{r templates}
+prompts <- list(
+  analyze_paper = paste(
+    "You are an academic paper analyst. Return ONLY valid JSON.",
+    "Extract: research_question, methodology, key_findings (3-5 bullets), implications, limitations.",
+    "Title: {title}",
+    "Abstract: {abstract}",
+    sep = "\n"
+  ),
+
+  relevance_scoring = paste(
+    "Return ONLY valid JSON with fields:",
+    "- relevance_score (1-5)",
+    "- explanation (<= 3 sentences)",
+    "- key_connections (2-3 bullets)",
+    "Research Question: {rq}",
+    "Title: {title}",
+    "Abstract: {abstract}",
+    sep = "\n"
+  ),
+
+  synthesis = paste(
+    "You are writing a concise academic literature synthesis.",
+    "Produce: COMMON THEMES, KEY FINDINGS, GAPS, FUTURE RESEARCH.",
+    "Research Question: {rq}",
+    "Papers:",
+    "{papers_text}",
+    sep = "\n"
+  )
+)
+
+render_prompt <- function(template, data) {
+  # Use glue with braces as delimiters
+  glue::glue(template, .open = "{", .close = "}", .envir = list2env(data))
+}
+
+strip_code_fences <- function(x) {
+  x <- trimws(x)
+  if (startsWith(x, "```")) {
+    x <- sub("^```[a-zA-Z]*\\n", "", x)
+    x <- sub("\\n```$", "", x)
+  }
+  x
+}
+```
+
+## Part 2: Single paper review → JSON
+
+```{r single-paper}
+analyze_single_paper <- function(chat, title, abstract) {
+  p <- render_prompt(prompts$analyze_paper, list(title = title, abstract = abstract))
+  out <- chat$chat(p)
+  out <- strip_code_fences(out)
+  # Try parse JSON; on failure return raw text for inspection
+  res <- try(jsonlite::fromJSON(out), silent = TRUE)
+  if (inherits(res, "try-error")) list(error = "Failed to parse JSON", raw = out) else res
+}
+
+# Example paper
+sample_title <- "The Impact of AI Tools on Academic Research Productivity"
+sample_abstract <- "This study examines the impact of AI tools on academic research productivity..."
+
+res <- analyze_single_paper(chat, sample_title, sample_abstract)
+str(res, max.level = 1)
+```
+
+## Part 3: Batch processing with a for loop
+
+```{r batch}
+sample_papers <- tibble::tibble(
+  title = c(
+    "Machine Learning in Healthcare",
+    "Climate Change and Economic Growth",
+    "Digital Divide in Education"
+  ),
+  abstract = c(
+    "This review examines ML applications in healthcare diagnosis and treatment.",
+    "Using panel data from 150 countries, we study climate impacts on GDP.",
+    "COVID-19 exposed disparities in digital learning access across demographics."
+  )
+)
+
+process_paper_batch <- function(chat, papers_tbl) {
+  results <- vector("list", nrow(papers_tbl))
+  for (i in seq_len(nrow(papers_tbl))) {
+    cat("\n--- Item", i, ":", papers_tbl$title[i], "---\n")
+    results[[i]] <- analyze_single_paper(chat, papers_tbl$title[i], papers_tbl$abstract[i])
+  }
+  results
+}
+
+batch_results <- process_paper_batch(chat, sample_papers)
+length(batch_results)
+```
+
+## Part 4: Relevance scoring against a research question
+
+```{r relevance}
+evaluate_paper_relevance <- function(chat, title, abstract, rq) {
+  p <- render_prompt(prompts$relevance_scoring, list(title = title, abstract = abstract, rq = rq))
+  out <- chat$chat(p)
+  out <- strip_code_fences(out)
+  if (!RUN_LIVE) {
+    return(list(
+      relevance_score = 3,
+      explanation = "Mock relevance; set OPENAI_API_KEY to run live.",
+      key_connections = c("Example connection 1", "Example connection 2")
+    ))
+  }
+  res <- try(jsonlite::fromJSON(out), silent = TRUE)
+  if (inherits(res, "try-error")) list(error = "Failed to parse JSON", raw = out) else res
+}
+
+my_rq <- "How do AI tools like ChatGPT impact research productivity in literature reviews and data analysis?"
+
+for (i in seq_len(nrow(sample_papers))) {
+  rel <- evaluate_paper_relevance(chat, sample_papers$title[i], sample_papers$abstract[i], my_rq)
+  cat(sprintf("\nPaper: %s\nRelevance: %s/5\nExplanation: %s\n", sample_papers$title[i], rel$relevance_score, rel$explanation))
+}
+```
+
+## Part 5: Literature review synthesis
+
+```{r synthesis}
+papers_text <- paste(
+  sprintf("Paper %d: %s\nFindings: %s", seq_len(nrow(sample_papers)), sample_papers$title, sample_papers$abstract),
+  collapse = "\n\n"
+)
+
+generate_literature_synthesis <- function(chat, rq, papers_text) {
+  p <- render_prompt(prompts$synthesis, list(rq = rq, papers_text = papers_text))
+  chat$chat(p)
+}
+
+syn <- generate_literature_synthesis(chat, my_rq, papers_text)
+cat(syn)
+```
+
+## Loop patterns: minimal, step-by-step, vectorized
+
+```{r loop-patterns}
+loop_minimal <- function(chat, papers_tbl) {
+  for (i in seq_len(nrow(papers_tbl))) {
+    p <- render_prompt(prompts$analyze_paper, list(title = papers_tbl$title[i], abstract = papers_tbl$abstract[i]))
+    out <- chat$chat(p)
+    cat("\nPaper", i, ":", papers_tbl$title[i], "\n", out, "\n", sep = "")
+  }
+}
+
+loop_step_by_step <- function(chat, papers_tbl, rq) {
+  for (i in seq_len(nrow(papers_tbl))) {
+    cat("\n=== Item", i, ":", papers_tbl$title[i], "===\n")
+    p <- render_prompt(prompts$relevance_scoring, list(title = papers_tbl$title[i], abstract = papers_tbl$abstract[i], rq = rq))
+    cat("Rendered prompt (first lines):\n", paste(head(strsplit(p, "\n")[[1]], 12), collapse = "\n"), "\n\n", sep = "")
+    out <- chat$chat(p)
+    cat("Model output:\n", out, "\n", sep = "")
+  }
+}
+
+loop_vectorized_single_prompt <- function(chat, papers_tbl) {
+  items <- paste(sprintf("Paper %d:\nTitle: %s\nAbstract: %s", seq_len(nrow(papers_tbl)), papers_tbl$title, papers_tbl$abstract), collapse = "\n\n")
+  p <- glue::glue(
+    "Return ONLY JSON. For each paper below, extract research_question and 2 key findings.\n{items}"
+  )
+  out <- chat$chat(p)
+  cat(out)
+}
+
+# Demonstrate the patterns (uncomment to run)
+# loop_minimal(chat, sample_papers)
+# loop_step_by_step(chat, sample_papers, my_rq)
+# loop_vectorized_single_prompt(chat, sample_papers)
+```
+
+## Best practices
+
+- Keep prompts brief but explicit; request strict JSON when you need structure
+- Handle occasional parsing failures; print raw and inspect
+- For larger batches, consider combining multiple items per request
+- Rate limiting happens (HTTP 429): pause briefly and retry
+
+## Troubleshooting
+
+- 401 Unauthorized: check `OPENAI_API_KEY`
+- 429 Too Many Requests: slow down requests or batch
+- 500 Server Error: retry after a short delay
+
+## Glossary
+
+- API: Interface your code uses to call a service
+- Prompt: The instruction you send to the model
+- Tokens: Units used for billing/limits
+- Temperature: Randomness control (lower → more consistent)
+
