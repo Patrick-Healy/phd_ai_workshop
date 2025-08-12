@@ -1,0 +1,106 @@
+---
+title: "AI Workshop"
+output: html_document
+date: '2025-04-01'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+#install.packages("ellmer")
+library(ellmer)
+```
+```{r}
+library(askpass)
+Sys.setenv(OPENAI_API_KEY = askpass::askpass("Enter your OpenAI API Key:"))
+
+```
+
+```{r}
+my_function <- function() {
+  chat <- chat_openai(
+    model = "gpt-4o-mini",
+    system_prompt = "You are a friendly but terse assistant.",
+  )
+  chat$chat("Is R a functional programming language? Wy would it be helpful to use Language Models such as GPT-4 in R?")
+}
+my_function()
+```
+
+```{r}
+my_function <- function() {
+  chat <- chat_openai(
+    model = "gpt-4o-mini",
+    system_prompt = "You are a friendly but terse assistant.",
+  )
+  chat$chat("Suggest rmarkdown code using tidyverse and ggplot2 to do a scatterplot of mtcars variable after cleaning missing rows.")
+}
+my_function()
+```
+
+
+
+
+```{r}
+text <- "
+  The product was okay, but the customer service was terrible. I probably
+  won't buy from them again.
+"
+type_sentiment <- type_object(
+  "Extract the sentiment scores of a given text. Sentiment scores should sum to 1.",
+  positive_score = type_number("Positive sentiment score, ranging from 0.0 to 1.0."),
+  negative_score = type_number("Negative sentiment score, ranging from 0.0 to 1.0."),
+  neutral_score = type_number("Neutral sentiment score, ranging from 0.0 to 1.0.")
+)
+chat <- chat_openai()
+#> Using model = "gpt-4o".
+str(chat$extract_data(text, type = type_sentiment))
+```
+
+
+```{r}
+# Example text responses (we'll use these for sentiment analysis)
+texts <- c(
+  "ChatGPT has been incredibly useful for summarizing articles during my literature reviews. It saves a lot of time!",
+  "I'm unsure about using AI for research—I'm worried it might miss important nuances in qualitative data.",
+  "I'm excited about using AI tools like Copilot to help with coding, especially for automating data analysis!",
+  "I am not confident in AI tools for literature reviews, as I feel they may lack the depth required for serious research.",
+  "I appreciate how AI can assist in research productivity, helping with tasks like summarizing research papers and finding gaps.",
+  "AI seems promising for data analysis, but I'm still skeptical about its accuracy in econometrics.",
+  "The potential of using AI for enhancing qualitative data analysis and transcript processing is very exciting to me.",
+  "I'm interested in AI tools for general research productivity but hesitant about how well they will integrate with existing workflows."
+)
+# Define the sentiment structure (positive, negative, neutral sentiment scores)
+type_sentiment <- type_object(
+  "Extract the sentiment scores of a given text. Sentiment scores should sum to 1.",
+  positive_score = type_number("Positive sentiment score, ranging from 0.0 to 1.0."),
+  negative_score = type_number("Negative sentiment score, ranging from 0.0 to 1.0."),
+  neutral_score = type_number("Neutral sentiment score, ranging from 0.0 to 1.0.")
+)
+# Initialize chat API (assuming chat_openai() is already set up)
+chat <- chat_openai()
+# Initialize an empty list to store the sentiment data for each text
+sentiment_list <- list()
+# Loop through each text and extract sentiment data
+for (text in texts) {
+  sentiment_data <- chat$extract_data(text, type = type_sentiment)
+  # Store the sentiment data in the list
+  sentiment_list <- append(sentiment_list, list(sentiment_data))
+}
+# Convert the sentiment list to a DataFrame
+sentiment_df <- do.call(rbind, lapply(sentiment_list, function(x) {
+  data.frame(
+    positive_score = x$positive_score,
+    negative_score = x$negative_score,
+    neutral_score = x$neutral_score
+  )
+}))
+# Add the original text as a new column to the DataFrame
+sentiment_df$text <- texts
+# View the sentiment DataFrame
+sentiment_df
+```
+
