@@ -66,6 +66,7 @@ output/
 results/
 exports/
 *.pdf
+!phd_ai_workshop_slides.pdf
 *.png
 *.jpg
 *.jpeg
